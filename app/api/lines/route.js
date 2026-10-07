@@ -7,7 +7,7 @@ export async function GET(request) {
   const drawing = await getDrawing()
   const params = request.nextUrl.searchParams
   let at = Number(params.get('at') || 1)
-  const limit = Number(params.get('limit') || 100)
+  const limit = Number(params.get('limit') || 1000)
   const query = params.get('q') || ''
   if (query) {
     const found = drawing.find(query)

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Wheel, { landingRotation } from './Wheel'
 
-const PAGE = 100
+const PAGE = 1000
 
 function money(value) {
   return Number(value || 0).toLocaleString()
@@ -50,24 +50,6 @@ export default function Dashboard() {
     return () => { cancelled = true }
   }, [summary, at])
 
-  async function onSearch(event) {
-    event.preventDefault()
-    const needle = query.trim()
-    if (!needle) {
-      setAt(Math.max(1, Number(jump) || 1))
-      setLineMeta((current) => ({ ...current, empty: '' }))
-      return
-    }
-    const response = await fetch(`/api/lines?q=${encodeURIComponent(needle)}&limit=${PAGE}`)
-    const payload = await response.json()
-    if (!payload.rows?.length) {
-      setLineRows([])
-      setLineMeta({ total: summary.totalLines, empty: 'No matching email or name.' })
-      return
-    }
-    setAt(payload.at)
-  }
-
   async function draw() {
     if (spinning.current) return
     spinning.current = true
@@ -91,6 +73,10 @@ export default function Dashboard() {
   const displayName = winner?.name || winner?.email || ''
 
   return (
+    <>
+    <header className="brand">
+      <img src="/bluff-logo.png" alt="Bluff" />
+    </header>
     <main>
       <h1>Bluff Fly a Fan</h1>
       {error && <p className="error">{error}</p>}
@@ -125,20 +111,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        <form className="tools" onSubmit={onSearch}>
-          <input type="search" placeholder="Find an email, name, or phone" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <label className="jump">
-            Go to line
-            <input
-              type="number"
-              min="1"
-              max={summary?.totalLines || undefined}
-              value={jump}
-              onChange={(event) => setJump(event.target.value)}
-            />
-          </label>
-          {summary && <a className="export-button" href="/api/export">Export CSV</a>}
-        </form>
         <table id="line-table">
           <thead>
             <tr><th className="num">Line</th><th>Email</th><th>Name</th><th>Phone</th></tr>
@@ -165,9 +137,10 @@ export default function Dashboard() {
           <button className="nav" type="button" disabled={!lineRows.length || lastLine >= lineMeta.total} onClick={() => setAt(at + PAGE)}>Next</button>
         </div>
         <p className="note">
-          Sheets, Excel, and Numbers stop around one million rows. This page keeps all {summary ? money(summary.totalLines) : ''} purchase lines. Use Go to line to open any part of the list, or export the CSV.
+          Sheets, Excel, and Numbers stop around one million rows. This page keeps all {summary ? money(summary.totalLines) : ''} purchase lines.
         </p>
       </section>
     </main>
+    </>
   )
 }
