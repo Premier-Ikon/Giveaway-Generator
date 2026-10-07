@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bluff Fly a Fan · Sep 2026</title>
+  <style>
+    :root { color-scheme: light; --ink: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --bg: #f5f5f7; --blue: #0071e3; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+    main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 32px; letter-spacing: -0.4px; margin: 0 0 8px; }
+    .lede { color: var(--muted); margin: 0 0 24px; line-height: 1.5; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat { background: white; border-radius: 14px; padding: 16px 18px; }
+    .stat span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+    .stat strong { font-size: 26px; letter-spacing: -0.4px; }
+    .panel { background: white; border-radius: 14px; padding: 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tabs button { border: 0; background: transparent; color: var(--muted); border-radius: 999px; padding: 8px 14px; cursor: pointer; font: inherit; }
+    .tabs button.active { background: #1d1d1f; color: white; }
+    .tools { display: flex; gap: 12px; margin-bottom: 12px; }
+    input[type="search"], input[type="number"] { font: inherit; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+    input[type="search"] { flex: 1; }
+    label.jump { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; white-space: nowrap; }
+    input[type="number"] { width: 140px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 14px; }
+    button.nav { font: inherit; border: 1px solid var(--line); background: white; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    button.nav:disabled { opacity: 0.4; cursor: default; }
+    .note { color: var(--muted); font-size: 13px; margin-top: 16px; line-height: 1.45; }
+    .empty { color: var(--muted); padding: 24px 8px; }
+    @media (max-width: 800px) {
+      .stats, .tools { grid-template-columns: 1fr; display: grid; }
+      label.jump { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Bluff Fly a Fan</h1>
+    <p class="lede" id="lede">Loading the drawing list…</p>
+    <section class="stats">
+      <div class="stat"><span>Total lines</span><strong id="total">–</strong></div>
+      <div class="stat"><span>People</span><strong id="people">–</strong></div>
+      <div class="stat"><span>Sweepstakes report</span><strong id="orders">–</strong></div>
+      <div class="stat"><span>AMOE</span><strong id="amoe">–</strong></div>
+    </section>
+    <section class="panel">
+      <div class="tabs">
+        <button id="tab-lines" class="active" type="button">Drawing lines</button>
+        <button id="tab-people" type="button">People</button>
+      </div>
+      <div id="lines-view">
+        <form class="tools" id="line-form">
+          <input id="search" type="search" placeholder="Find an email or name">
+          <label class="jump">Go to line <input id="jump" type="number" min="1" step="1" value="1"></label>
+        </form>
+        <table>
+          <thead>
+            <tr><th class="num">Line</th><th>Email</th><th>Name</th><th>Source</th></tr>
+          </thead>
+          <tbody id="line-rows"></tbody>
+        </table>
+        <div class="pager">
+          <button class="nav" id="prev" type="button">Previous</button>
+          <span id="range"></span>
+          <button class="nav" id="next" type="button">Next</button>
+        </div>
+      </div>
+      <div id="people-view" hidden>
+        <form class="tools" id="people-form">
+          <input id="people-search" type="search" placeholder="Search people">
+        </form>
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Name</th><th>Source</th><th class="num">Entries</th><th class="num">First line</th></tr>
+          </thead>
+          <tbody id="people-rows"></tbody>
+        </table>
+        <div class="pager">
+          <button class="nav" id="people-prev" type="button">Previous</button>
+          <span id="people-range"></span>
+          <button class="nav" id="people-next" type="button">Next</button>
+        </div>
+      </div>
+      <p class="note" id="note"></p>
+    </section>
+  </main>
+  <script>
+    const PAGE = 100;
+    let summary = null;
+    let at = 1;
+    let peoplePage = 1;
+    let mode = "lines";
+
+    const totalEl = document.getElementById("total");
+    const peopleEl = document.getElementById("people");
+    const ordersEl = document.getElementById("orders");
+    const amoeEl = document.getElementById("amoe");
+    const lede = document.getElementById("lede");
+    const note = document.getElementById("note");
+    const jump = document.getElementById("jump");
+    const search = document.getElementById("search");
+    const lineRows = document.getElementById("line-rows");
+    const range = document.getElementById("range");
+
+    function money(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    async function loadSummary() {
+      summary = await (await fetch("/api/summary")).json();
+      totalEl.textContent = money(summary.totalLines);
+      peopleEl.textContent = money(summary.loadedPeople);
+      ordersEl.textContent = money(summary.orderLines);
+      amoeEl.textContent = money(summary.amoeLines);
+      jump.max = String(summary.totalLines);
+      lede.textContent = "August 19–September 30, 2026. Purchase entries are Net sales × 5. AMOE entries are Ntries × 5. The list below is every drawing line, in that order.";
+      note.textContent = "Sheets, Excel, and Numbers stop around one million rows. This page keeps all " + money(summary.totalLines) + " lines. Use Go to line to open any part of the list.";
+      await loadLines();
+    }
+
+    async function loadLines() {
+      const response = await fetch("/api/lines?at=" + encodeURIComponent(at) + "&limit=" + PAGE);
+      const payload = await response.json();
+      at = payload.at;
+      jump.value = String(at);
+      lineRows.replaceChildren();
+      if (!payload.rows.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td class="empty" colspan="4">No lines in this range.</td>';
+        lineRows.appendChild(row);
+        range.textContent = "";
+      } else {
+        for (const item of payload.rows) {
+          const row = document.createElement("tr");
+          row.append(
+            cell(money(item.line), true),
+            cell(item.email),
+            cell(item.name),
+            cell(item.source),
+          );
+          lineRows.appendChild(row);
+        }
+        const last = payload.rows[payload.rows.length - 1].line;
+        range.textContent = money(payload.rows[0].line) + "–" + money(last) + " of " + money(payload.total);
+      }
+      document.getElementById("prev").disabled = at <= 1;
+      document.getElementById("next").disabled = !payload.rows.length || payload.rows[payload.rows.length - 1].line >= payload.total;
+    }
+
+    function cell(text, numeric) {
+      const td = document.createElement("td");
+      if (numeric) td.className = "num";
+      td.textContent = text || "";
+      return td;
+    }
+
+    async function loadPeople() {
+      const query = document.getElementById("people-search").value.trim();
+      const response = await fetch("/api/people?page=" + peoplePage + "&q=" + encodeURIComponent(query));
+      const payload = await response.json();
+      const body = document.getElementById("people-rows");
+      body.replaceChildren();
+      if (!payload.rows.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td class="empty" colspan="5">No matching people.</td>';
+        body.appendChild(row);
+      } else {
+        for (const person of payload.rows) {
+          const row = document.createElement("tr");
+          const open = document.createElement("button");
+          open.className = "nav";
+          open.type = "button";
+          open.textContent = money(person.firstLine);
+          open.addEventListener("click", () => {
+            at = person.firstLine;
+            show("lines");
+            loadLines();
+          });
+          const lineCell = document.createElement("td");
+          lineCell.className = "num";
+          lineCell.appendChild(open);
+          row.append(
+            cell(person.email),
+            cell(person.name),
+            cell(person.sources.join(", ")),
+            cell(money(person.entries), true),
+            lineCell,
+          );
+          body.appendChild(row);
+        }
+      }
+      document.getElementById("people-range").textContent = "Page " + payload.page + " of " + payload.pages + " · " + money(payload.total) + " people";
+      document.getElementById("people-prev").disabled = payload.page <= 1;
+      document.getElementById("people-next").disabled = payload.page >= payload.pages;
+    }
+
+    function show(next) {
+      mode = next;
+      document.getElementById("lines-view").hidden = next !== "lines";
+      document.getElementById("people-view").hidden = next !== "people";
+      document.getElementById("tab-lines").classList.toggle("active", next === "lines");
+      document.getElementById("tab-people").classList.toggle("active", next === "people");
+    }
+
+    document.getElementById("tab-lines").addEventListener("click", () => show("lines"));
+    document.getElementById("tab-people").addEventListener("click", () => { show("people"); loadPeople(); });
+    document.getElementById("prev").addEventListener("click", () => { at = Math.max(1, at - PAGE); loadLines(); });
+    document.getElementById("next").addEventListener("click", () => { at += PAGE; loadLines(); });
+    document.getElementById("line-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const query = search.value.trim();
+      if (query) {
+        const response = await fetch("/api/lines?q=" + encodeURIComponent(query) + "&limit=" + PAGE);
+        const payload = await response.json();
+        if (!payload.rows.length) {
+          lineRows.replaceChildren();
+          const row = document.createElement("tr");
+          row.innerHTML = '<td class="empty" colspan="4">No matching email or name.</td>';
+          lineRows.appendChild(row);
+          range.textContent = "";
+          return;
+        }
+        at = payload.at;
+      } else {
+        at = Math.max(1, Number(jump.value) || 1);
+      }
+      await loadLines();
+    });
+    document.getElementById("people-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      peoplePage = 1;
+      loadPeople();
+    });
+    document.getElementById("people-prev").addEventListener("click", () => { peoplePage -= 1; loadPeople(); });
+    document.getElementById("people-next").addEventListener("click", () => { peoplePage += 1; loadPeople(); });
+    loadSummary().catch((error) => { lede.textContent = error.message; });
+  </script>
+</body>
+</html>
