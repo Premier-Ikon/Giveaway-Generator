@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Wheel, { landingRotation } from './Wheel'
+import { DRAWING_API } from '../lib/drawingApi'
 
 const PAGE = 1000
 
@@ -23,7 +24,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/summary')
+    fetch(`${DRAWING_API}/summary`)
       .then((response) => {
         if (!response.ok) throw new Error('The drawing list could not be loaded.')
         return response.json()
@@ -40,7 +41,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!summary) return undefined
     let cancelled = false
-    fetch(`/api/lines?at=${encodeURIComponent(at)}&limit=${PAGE}`)
+    fetch(`${DRAWING_API}/lines?at=${encodeURIComponent(at)}&limit=${PAGE}`)
       .then((response) => response.json())
       .then((payload) => {
         if (cancelled) return
@@ -57,7 +58,7 @@ export default function Dashboard() {
     setWinner(null)
     setDrawError('')
     try {
-      const response = await fetch('/api/draw', { method: 'POST' })
+      const response = await fetch(`${DRAWING_API}/draw`, { method: 'POST' })
       if (!response.ok) throw new Error('The draw could not be completed.')
       const payload = await response.json()
       setRotation((current) => landingRotation(current, payload.winner.line, summary.totalLines))
@@ -78,7 +79,6 @@ export default function Dashboard() {
       <img src="/bluff-logo.png" alt="Bluff" />
     </header>
     <main>
-      <h1>Bluff Fly a Fan</h1>
       {error && <p className="error">{error}</p>}
       <section className="panel">
         <div className="stage">
@@ -95,7 +95,6 @@ export default function Dashboard() {
             <button className="draw-button" type="button" onClick={draw} disabled={!summary || phase === 'spinning'}>
               {phase === 'spinning' ? 'Spinning…' : 'Draw winner'}
             </button>
-            {summary && <p className="draw-note">Each of the {money(summary.totalLines)} purchase lines has the same chance.</p>}
             {drawError && <p className="error">{drawError}</p>}
           </div>
           {phase === 'landed' && winner ? (
