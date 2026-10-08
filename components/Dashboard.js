@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [phase, setPhase] = useState('idle')
   const [winner, setWinner] = useState(null)
   const [drawError, setDrawError] = useState('')
+  const [count, setCount] = useState(3)
   const spinning = useRef(false)
 
   useEffect(() => {
@@ -40,11 +41,26 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (phase !== 'landed') return undefined
+    if (phase !== 'countdown' && phase !== 'landed') return undefined
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previous }
   }, [phase])
+
+  useEffect(() => {
+    if (phase !== 'countdown') return undefined
+    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 900
+    const timer = setTimeout(() => {
+      setCount((value) => {
+        if (value <= 1) {
+          setPhase('landed')
+          return 3
+        }
+        return value - 1
+      })
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [phase, count])
 
   useEffect(() => {
     if (!summary) return undefined
@@ -79,7 +95,7 @@ export default function Dashboard() {
   }
 
   const lastLine = lineRows.length ? lineRows[lineRows.length - 1].line : 0
-  const displayName = winner?.id || ''
+  const displayName = winner?.name || winner?.id || ''
 
   return (
     <>
@@ -99,11 +115,15 @@ export default function Dashboard() {
               rotation={rotation}
               onSettled={() => {
                 spinning.current = false
-                setPhase((current) => (current === 'spinning' ? 'landed' : current))
+                setPhase((current) => {
+                  if (current !== 'spinning') return current
+                  setCount(3)
+                  return 'countdown'
+                })
               }}
             />
-            <button className="draw-button" type="button" onClick={draw} disabled={!summary || phase === 'spinning'}>
-              {phase === 'spinning' ? 'Spinning…' : 'Draw winner'}
+            <button className="draw-button" type="button" onClick={draw} disabled={!summary || phase === 'spinning' || phase === 'countdown'}>
+              {phase === 'spinning' || phase === 'countdown' ? 'Drawing…' : 'Draw winner'}
             </button>
             {drawError && <p className="error">{drawError}</p>}
           </div>
@@ -111,7 +131,7 @@ export default function Dashboard() {
 
         <table id="line-table">
           <thead>
-            <tr><th className="num">Line</th><th>Id</th><th>Source</th></tr>
+            <tr><th className="num">Line</th><th>Name</th><th>Source</th></tr>
           </thead>
           <tbody>
             {lineRows.length === 0 && (
@@ -120,7 +140,7 @@ export default function Dashboard() {
             {lineRows.map((item) => (
               <tr key={item.line}>
                 <td className="num">{money(item.line)}</td>
-                <td>{item.id}</td>
+                <td>{item.name || item.id}</td>
                 <td>{item.source}</td>
               </tr>
             ))}
@@ -134,10 +154,15 @@ export default function Dashboard() {
           <button className="nav" type="button" disabled={!lineRows.length || lastLine >= lineMeta.total} onClick={() => setAt(at + PAGE)}>Next</button>
         </div>
         <p className="note">
-          This page keeps all {summary ? money(summary.totalLines) : ''} entry lines. Gotbluff ids are Shopify emails. Spin quest ids come from the entry file.
+          This page keeps all {summary ? money(summary.totalLines) : ''} entry lines, shuffled so both sources are mixed through the list. Gotbluff shows the Shopify customer name. Spin quest shows the entry id.
         </p>
       </section>
     </main>
+    {phase === 'countdown' && (
+      <div className="reveal" role="dialog" aria-modal="true" aria-label="Countdown">
+        <p className="countdown">{count}</p>
+      </div>
+    )}
     {phase === 'landed' && winner && (
       <div className="reveal" role="dialog" aria-modal="true" aria-label="Winner" onClick={() => setPhase('idle')}>
         <Confetti />

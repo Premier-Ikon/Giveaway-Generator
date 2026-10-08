@@ -1,14 +1,16 @@
 """Load Fly a Fan entries into the named Firestore database.
 
 Each stored row is an id, a source, and how many drawing lines that id has.
-Shopify purchases use the customer email as the id and source "gotbluff".
-Entry weight stays Net sales × 5. The spin quest file is one line per entry,
-with that id and source "spin quest".
+Shopify purchases use the customer email as the id, the customer name for the
+live read, and source "gotbluff". Entry weight stays Net sales × 5. The spin
+quest file is one line per entry, with that id and source "spin quest".
 """
 
 import csv
+import hashlib
 import io
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -64,10 +66,21 @@ def gotbluff_rows():
     for record in read_zip_csv(ORDERS_ZIP):
         count = entry_count(record.get("Net sales"))
         email = (record.get("Customer email") or "").strip()
+        name = (record.get("Customer name") or "").strip()
         if count <= 0 or not email:
             continue
         add_entry(order, totals, email, count, fold=True)
-    return [{"id": totals[key]["id"], "source": GOTBLUFF, "entries": totals[key]["entries"]} for key in order]
+        if name and not totals[email.casefold()].get("name"):
+            totals[email.casefold()]["name"] = name
+    return [
+        {
+            "id": totals[key]["id"],
+            "name": totals[key].get("name", ""),
+            "source": GOTBLUFF,
+            "entries": totals[key]["entries"],
+        }
+        for key in order
+    ]
 
 
 def spin_quest_rows():

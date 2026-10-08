@@ -20,30 +20,48 @@ function bisectRight(values, target) {
   return low
 }
 
+function gcd(left, right) {
+  let a = Math.abs(left)
+  let b = Math.abs(right)
+  while (b) {
+    const next = a % b
+    a = b
+    b = next
+  }
+  return a
+}
+
+function mixStep(total) {
+  let step = Math.max(1, Math.floor(total * 0.618033988749895))
+  if (step % 2 === 0) step += 1
+  while (gcd(step, total) !== 1) step += 2
+  return step
+}
+
 function buildDrawing(runs) {
   const starts = runs.map((run) => run.start)
   const totalLines = runs.length ? runs[runs.length - 1].start + runs[runs.length - 1].entries - 1 : 0
+  const step = totalLines > 1 ? mixStep(totalLines) : 1
+
+  function runAt(realLine) {
+    return runs[bisectRight(starts, realLine) - 1]
+  }
 
   function lines(at, limit) {
     if (totalLines <= 0) return []
     const startLine = Math.min(Math.max(1, at), totalLines)
-    const size = Math.min(Math.max(1, limit), 1000)
-    let index = bisectRight(starts, startLine) - 1
+    const size = Math.min(Math.max(1, limit), 1000, totalLines - startLine + 1)
     const page = []
-    let line = startLine
-    while (page.length < size && index < runs.length) {
-      const run = runs[index]
-      const last = run.start + run.entries - 1
-      const take = Math.min(size - page.length, last - line + 1)
-      for (let offset = 0; offset < take; offset += 1) {
-        page.push({
-          line: line + offset,
-          id: run.id,
-          source: run.source,
-        })
-      }
-      line += take
-      index += 1
+    for (let offset = 0; offset < size; offset += 1) {
+      const displayLine = startLine + offset
+      const realLine = ((displayLine - 1) * step) % totalLines + 1
+      const run = runAt(realLine)
+      page.push({
+        line: displayLine,
+        id: run.id,
+        name: run.name || '',
+        source: run.source,
+      })
     }
     return page
   }
@@ -55,6 +73,7 @@ function buildDrawing(runs) {
       winner: {
         line: row.line,
         id: row.id,
+        name: row.name,
         source: row.source,
       },
     }
@@ -89,6 +108,7 @@ async function loadDrawing() {
       if (entries <= 0) continue
       runs.push({
         id: row.id || row.email || '',
+        name: row.name || '',
         source: row.source || chunk.source || '',
         entries,
         start: line,
