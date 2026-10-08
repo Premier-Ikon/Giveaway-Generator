@@ -6,6 +6,7 @@ import { DRAWING_API } from '../lib/drawingApi'
 
 const PAGE = 1000
 const COUNTDOWN_FROM = 7
+const COUNTDOWN_TICKS = 48
 
 function money(value) {
   return Number(value || 0).toLocaleString()
@@ -149,12 +150,25 @@ export default function Dashboard() {
       </div>
     )}
     {phase === 'countdown' && (
-      <div className="reveal" role="dialog" aria-modal="true" aria-label="Countdown">
-        <p className="countdown">{count}</p>
+      <div className="reveal reveal-countdown" role="dialog" aria-modal="true" aria-label="Countdown">
+        <div className="countdown-stage" key={count}>
+          <div className="countdown-ring" aria-hidden="true">
+            {Array.from({ length: COUNTDOWN_TICKS }, (_, index) => (
+              <span
+                key={index}
+                className="countdown-spoke"
+                style={{ transform: `rotate(${(index / COUNTDOWN_TICKS) * 360}deg)` }}
+              >
+                <span className="countdown-tick" />
+              </span>
+            ))}
+          </div>
+          <p className="countdown">{count}</p>
+        </div>
       </div>
     )}
     {phase === 'landed' && winner && (
-      <div className="reveal" role="dialog" aria-modal="true" aria-label="Winner" onClick={() => setPhase('idle')}>
+      <div className="reveal reveal-countdown" role="dialog" aria-modal="true" aria-label="Winner" onClick={() => setPhase('idle')}>
         <Confetti />
         <article className="reveal-card" onClick={(event) => event.stopPropagation()}>
           <p className="reveal-kicker">Congrats</p>

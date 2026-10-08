@@ -1,10 +1,16 @@
-import { Newsreader } from 'next/font/google'
+import { Montserrat, Newsreader } from 'next/font/google'
 import './globals.css'
 
 const display = Newsreader({
   subsets: ['latin'],
   weight: ['500', '600'],
   variable: '--font-display',
+})
+
+const brand = Montserrat({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-brand',
 })
 
 export const metadata = {
@@ -14,7 +20,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={display.variable}>
+    <html lang="en" className={`${display.variable} ${brand.variable}`}>
       <body>{children}</body>
     </html>
   )
