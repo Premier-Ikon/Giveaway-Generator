@@ -135,6 +135,7 @@ function originAllowed(origin) {
     const url = new URL(origin)
     if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) return true
     if (url.protocol === 'https:' && url.hostname.endsWith('.vercel.app')) return true
+    if (url.protocol === 'https:' && (url.hostname === 'pickmywinner.com' || url.hostname.endsWith('.pickmywinner.com'))) return true
   } catch {
     return false
   }
