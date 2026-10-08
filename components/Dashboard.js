@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Confetti from './Confetti'
 import Wheel, { landingRotation } from './Wheel'
 import { DRAWING_API } from '../lib/drawingApi'
 
@@ -37,6 +38,13 @@ export default function Dashboard() {
       })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (phase !== 'landed') return undefined
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [phase])
 
   useEffect(() => {
     if (!summary) return undefined
@@ -79,14 +87,16 @@ export default function Dashboard() {
       <img src="/bluff-logo.png" alt="Bluff" />
     </header>
     <main>
+      <div className="total">
+        <strong>{summary ? money(summary.totalLines) : '—'}</strong>
+        <span>Total entries</span>
+      </div>
       {error && <p className="error">{error}</p>}
       <section className="panel">
         <div className="stage">
           <div className="wheel-column">
             <Wheel
-              totalLines={summary?.totalLines || 0}
               rotation={rotation}
-              lockLine={phase === 'landed' ? winner?.line : null}
               onSettled={() => {
                 spinning.current = false
                 setPhase((current) => (current === 'spinning' ? 'landed' : current))
@@ -97,17 +107,6 @@ export default function Dashboard() {
             </button>
             {drawError && <p className="error">{drawError}</p>}
           </div>
-          {phase === 'landed' && winner ? (
-            <article className="winner-card">
-              <p className="eyebrow">Winner</p>
-              <h2 className="winner-name">{displayName}</h2>
-              {winner.source && <p className="winner-email">{winner.source}</p>}
-            </article>
-          ) : (
-            <article className="winner-card waiting">
-              Draw one winner. Their entry appears when the wheel stops.
-            </article>
-          )}
         </div>
 
         <table id="line-table">
@@ -139,6 +138,17 @@ export default function Dashboard() {
         </p>
       </section>
     </main>
+    {phase === 'landed' && winner && (
+      <div className="reveal" role="dialog" aria-modal="true" aria-label="Winner" onClick={() => setPhase('idle')}>
+        <Confetti />
+        <article className="reveal-card" onClick={(event) => event.stopPropagation()}>
+          <p className="reveal-kicker">Congrats</p>
+          <h2 className="reveal-name">{displayName.includes('@') ? <>{displayName.split('@')[0]}<wbr />@{displayName.split('@').slice(1).join('@')}</> : displayName}</h2>
+          {winner.source && <p className="reveal-source">{winner.source}</p>}
+          <button className="reveal-close" type="button" onClick={() => setPhase('idle')}>Close</button>
+        </article>
+      </div>
+    )}
     </>
   )
 }
