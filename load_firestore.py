@@ -1,17 +1,15 @@
-"""Load the Fly a Fan sweepstakes files into the named Firestore database.
+"""Load Fly a Fan entries into the named Firestore database.
 
-Orders: each row becomes int(Net sales × 5) drawing lines.
-AMOE: each row becomes int(Ntries × 5) drawing lines.
-Email, name, entry count, and phone are stored. The purchase file has no
-phone column, so the number is taken from the AMOE form when the email matches.
+Each stored row is an id, a source, and how many drawing lines that id has.
+Shopify purchases use the customer email as the id and source "gotbluff".
+Entry weight stays Net sales × 5. The spin quest file is one line per entry,
+with that id and source "spin quest".
 """
 
 import csv
 import io
 import subprocess
-import sys
 import zipfile
-from collections import Counter, defaultdict
 from pathlib import Path
 
 from google.cloud import firestore
@@ -20,8 +18,10 @@ from google.oauth2.credentials import Credentials
 from config import DATABASE, MULTIPLIER, PROJECT
 
 ORDERS_ZIP = Path("/Users/dylanguzman/Downloads/SWEEPSTAKES REPORT - 2026-08-19 - 2026-09-30.csv.zip")
-AMOE_ZIP = Path("/Users/dylanguzman/Downloads/AUGUST-SEPTEMBER 2026 FLY A FAN SWEEPSTAKES AMOE.csv.zip")
+SPIN_ZIP = Path("/Users/dylanguzman/Downloads/bluff_aug19_sep30_entries.txt.zip")
 CHUNK_ROWS = 400
+GOTBLUFF = "gotbluff"
+SPIN_QUEST = "spin quest"
 
 
 def client():
@@ -48,50 +48,43 @@ def read_zip_csv(path):
         return list(csv.DictReader(text))
 
 
-def phones_by_email():
-    counts = defaultdict(Counter)
-    for record in read_zip_csv(AMOE_ZIP):
-        email = (record.get("Email") or "").strip().lower()
-        phone = (record.get("Phone Number") or "").strip()
-        if email and phone:
-            counts[email][phone] += 1
-    chosen = {}
-    several = 0
-    for email, counter in counts.items():
-        if len(counter) > 1:
-            several += 1
-        chosen[email] = counter.most_common(1)[0][0]
-    return chosen, several
+def add_entry(order, totals, ident, count, fold):
+    key = ident.casefold() if fold else ident
+    row = totals.get(key)
+    if row is None:
+        row = {"id": ident, "entries": 0}
+        totals[key] = row
+        order.append(key)
+    row["entries"] += count
 
 
-def orders_rows(phones):
-    rows = []
+def gotbluff_rows():
+    order = []
+    totals = {}
     for record in read_zip_csv(ORDERS_ZIP):
         count = entry_count(record.get("Net sales"))
-        if count <= 0:
-            continue
         email = (record.get("Customer email") or "").strip()
-        rows.append({
-            "email": email,
-            "name": (record.get("Customer name") or "").strip(),
-            "phone": phones.get(email.lower(), ""),
-            "entries": count,
-        })
-    return rows
-
-
-def amoe_rows():
-    rows = []
-    for record in read_zip_csv(AMOE_ZIP):
-        count = entry_count(record.get("Ntries"))
-        if count <= 0:
+        if count <= 0 or not email:
             continue
-        rows.append({
-            "email": (record.get("Email") or "").strip(),
-            "name": (record.get("First and Last Name") or "").strip(),
-            "entries": count,
-        })
-    return rows
+        add_entry(order, totals, email, count, fold=True)
+    return [{"id": totals[key]["id"], "source": GOTBLUFF, "entries": totals[key]["entries"]} for key in order]
+
+
+def spin_quest_rows():
+    order = []
+    totals = {}
+    with zipfile.ZipFile(SPIN_ZIP) as archive:
+        name = next(
+            item
+            for item in archive.namelist()
+            if item.endswith(".txt") and not item.startswith("__MACOSX") and not Path(item).name.startswith("._")
+        )
+        with archive.open(name) as raw:
+            for line in raw:
+                ident = line.decode("utf-8", "replace").strip()
+                if ident:
+                    add_entry(order, totals, ident, 1, fold=False)
+    return [{"id": totals[key]["id"], "source": SPIN_QUEST, "entries": totals[key]["entries"]} for key in order]
 
 
 def wipe(db, collection):
@@ -107,22 +100,21 @@ def wipe(db, collection):
         removed += len(docs)
 
 
-def write_chunks(db, source, label, rows):
+def write_chunks(db, source, rows):
     written = 0
     batch = db.batch()
     pending = 0
+    slug = "gotbluff" if source == GOTBLUFF else "spinquest"
     for index in range(0, len(rows), CHUNK_ROWS):
         chunk = rows[index:index + CHUNK_ROWS]
-        ref = db.collection("runs").document(f"{source}-{index // CHUNK_ROWS:05d}")
+        ref = db.collection("runs").document(f"{slug}-{index // CHUNK_ROWS:05d}")
         batch.set(ref, {
             "source": source,
-            "label": label,
             "index": index // CHUNK_ROWS,
             "rows": chunk,
         })
         pending += 1
         written += 1
-        # A commit is capped at about 10 MB. Keep batches small.
         if pending == 25:
             batch.commit()
             batch = db.batch()
@@ -133,73 +125,34 @@ def write_chunks(db, source, label, rows):
     return written
 
 
-def add_phones(db, phones):
-    updated = 0
-    with_phone = 0
-    batch = db.batch()
-    pending = 0
-    for doc in db.collection("runs").stream():
-        data = doc.to_dict() or {}
-        if data.get("source") != "orders":
-            continue
-        rows = data.get("rows") or []
-        for row in rows:
-            phone = phones.get((row.get("email") or "").strip().lower(), "")
-            row["phone"] = phone
-            updated += 1
-            if phone:
-                with_phone += 1
-        batch.update(doc.reference, {"rows": rows})
-        pending += 1
-        if pending == 25:
-            batch.commit()
-            batch = db.batch()
-            pending = 0
-    if pending:
-        batch.commit()
-    return updated, with_phone
-
-
 def main():
-    phones, several = phones_by_email()
-    print(f"amoe phones {len(phones):,}, emails with more than one number {several:,}")
-    if "--phones-only" in sys.argv:
-        updated, with_phone = add_phones(client(), phones)
-        print(f"updated {updated:,} purchase rows, {with_phone:,} have a phone")
-        return
-
-    order_runs = orders_rows(phones)
-    amoe_runs = amoe_rows()
-    order_lines = sum(row["entries"] for row in order_runs)
-    amoe_lines = sum(row["entries"] for row in amoe_runs)
-    emails = set()
-    for row in order_runs + amoe_runs:
-        if row["email"]:
-            emails.add(row["email"].lower())
-    print(f"orders runs {len(order_runs):,} lines {order_lines:,}")
-    print(f"amoe runs {len(amoe_runs):,} lines {amoe_lines:,}")
-    print(f"total lines {order_lines + amoe_lines:,} people {len(emails):,}")
+    gotbluff = gotbluff_rows()
+    spin_quest = spin_quest_rows()
+    gotbluff_lines = sum(row["entries"] for row in gotbluff)
+    spin_lines = sum(row["entries"] for row in spin_quest)
+    print(f"gotbluff ids {len(gotbluff):,} lines {gotbluff_lines:,}")
+    print(f"spin quest ids {len(spin_quest):,} lines {spin_lines:,}")
+    print(f"total lines {gotbluff_lines + spin_lines:,}")
 
     db = client()
     print(f"clearing previous data in {DATABASE}")
     print(f"removed {wipe(db, 'runs')} old chunks")
-    order_chunks = write_chunks(db, "orders", "Sweepstakes report", order_runs)
-    amoe_chunks = write_chunks(db, "amoe", "AMOE", amoe_runs)
+    gotbluff_chunks = write_chunks(db, GOTBLUFF, gotbluff)
+    spin_chunks = write_chunks(db, SPIN_QUEST, spin_quest)
     db.collection("meta").document("summary").set({
         "title": "Bluff Fly a Fan Sep 2026",
         "multiplier": MULTIPLIER,
-        "totalLines": order_lines + amoe_lines,
-        "people": len(emails),
-        "orderRuns": len(order_runs),
-        "amoeRuns": len(amoe_runs),
-        "orderLines": order_lines,
-        "amoeLines": amoe_lines,
+        "totalLines": gotbluff_lines + spin_lines,
+        "gotbluffLines": gotbluff_lines,
+        "spinQuestLines": spin_lines,
+        "gotbluffIds": len(gotbluff),
+        "spinQuestIds": len(spin_quest),
         "files": [
-            {"id": "orders", "label": "Sweepstakes report", "lines": order_lines, "rule": "Net sales × 5"},
-            {"id": "amoe", "label": "AMOE", "lines": amoe_lines, "rule": "Ntries × 5"},
+            {"id": GOTBLUFF, "label": "Shopify", "lines": gotbluff_lines, "rule": "email, Net sales × 5"},
+            {"id": SPIN_QUEST, "label": "Spin quest", "lines": spin_lines, "rule": "one line per entry"},
         ],
     })
-    print(f"stored {order_chunks + amoe_chunks} chunks in {DATABASE}")
+    print(f"stored {gotbluff_chunks + spin_chunks} chunks in {DATABASE}")
 
 
 if __name__ == "__main__":

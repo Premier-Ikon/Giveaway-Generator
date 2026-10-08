@@ -71,7 +71,7 @@ export default function Dashboard() {
   }
 
   const lastLine = lineRows.length ? lineRows[lineRows.length - 1].line : 0
-  const displayName = winner?.name || winner?.email || ''
+  const displayName = winner?.id || ''
 
   return (
     <>
@@ -101,29 +101,28 @@ export default function Dashboard() {
             <article className="winner-card">
               <p className="eyebrow">Winner</p>
               <h2 className="winner-name">{displayName}</h2>
-              {winner.email && <p className="winner-email">{winner.email}</p>}
+              {winner.source && <p className="winner-email">{winner.source}</p>}
             </article>
           ) : (
             <article className="winner-card waiting">
-              Draw one winner from the purchase list. Their name appears when the wheel stops.
+              Draw one winner. Their entry appears when the wheel stops.
             </article>
           )}
         </div>
 
         <table id="line-table">
           <thead>
-            <tr><th className="num">Line</th><th>Email</th><th>Name</th><th>Phone</th></tr>
+            <tr><th className="num">Line</th><th>Id</th><th>Source</th></tr>
           </thead>
           <tbody>
             {lineRows.length === 0 && (
-              <tr><td className="empty" colSpan="4">{lineMeta.empty || 'Loading lines…'}</td></tr>
+              <tr><td className="empty" colSpan="3">{lineMeta.empty || 'Loading lines…'}</td></tr>
             )}
             {lineRows.map((item) => (
               <tr key={item.line}>
                 <td className="num">{money(item.line)}</td>
-                <td>{item.email}</td>
-                <td>{item.name}</td>
-                <td>{item.phone}</td>
+                <td>{item.id}</td>
+                <td>{item.source}</td>
               </tr>
             ))}
           </tbody>
@@ -136,7 +135,7 @@ export default function Dashboard() {
           <button className="nav" type="button" disabled={!lineRows.length || lastLine >= lineMeta.total} onClick={() => setAt(at + PAGE)}>Next</button>
         </div>
         <p className="note">
-          Sheets, Excel, and Numbers stop around one million rows. This page keeps all {summary ? money(summary.totalLines) : ''} purchase lines.
+          This page keeps all {summary ? money(summary.totalLines) : ''} entry lines. Gotbluff ids are Shopify emails. Spin quest ids come from the entry file.
         </p>
       </section>
     </main>

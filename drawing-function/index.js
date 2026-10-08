@@ -38,10 +38,8 @@ function buildDrawing(runs) {
       for (let offset = 0; offset < take; offset += 1) {
         page.push({
           line: line + offset,
-          email: run.email,
-          name: run.name,
-          phone: run.phone || '',
-          source: run.label,
+          id: run.id,
+          source: run.source,
         })
       }
       line += take
@@ -56,9 +54,7 @@ function buildDrawing(runs) {
     return {
       winner: {
         line: row.line,
-        email: row.email,
-        name: row.name,
-        phone: row.phone || '',
+        id: row.id,
         source: row.source,
       },
     }
@@ -67,8 +63,8 @@ function buildDrawing(runs) {
   return {
     summary: {
       totalLines,
-      orderLines: totalLines,
-      amoeLines: 0,
+      gotbluffLines: runs.filter((run) => run.source === 'gotbluff').reduce((sum, run) => sum + run.entries, 0),
+      spinQuestLines: runs.filter((run) => run.source === 'spin quest').reduce((sum, run) => sum + run.entries, 0),
       loadedRuns: runs.length,
     },
     lines,
@@ -77,9 +73,14 @@ function buildDrawing(runs) {
 }
 
 async function loadDrawing() {
-  const snapshot = await db.collection('runs').where('source', '==', 'orders').get()
+  const snapshot = await db.collection('runs').get()
   const chunks = snapshot.docs.map((doc) => doc.data())
-  chunks.sort((a, b) => Number(a.index) - Number(b.index))
+  const sourceOrder = { gotbluff: 0, 'spin quest': 1 }
+  chunks.sort((a, b) => {
+    const sourceDelta = (sourceOrder[a.source] ?? 9) - (sourceOrder[b.source] ?? 9)
+    if (sourceDelta !== 0) return sourceDelta
+    return Number(a.index) - Number(b.index)
+  })
   const runs = []
   let line = 1
   for (const chunk of chunks) {
@@ -87,11 +88,9 @@ async function loadDrawing() {
       const entries = Number(row.entries) || 0
       if (entries <= 0) continue
       runs.push({
-        email: row.email || '',
-        name: row.name || '',
-        phone: row.phone || '',
+        id: row.id || row.email || '',
+        source: row.source || chunk.source || '',
         entries,
-        label: chunk.label || chunk.source,
         start: line,
       })
       line += entries
