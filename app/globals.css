@@ -23,9 +23,18 @@ body {
   padding: 22px 20px;
 }
 
-.brand img { display: block; height: 52px; width: auto; }
+.brand h1 {
+  margin: 0;
+  color: white;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(22px, 3.6vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1.15;
+}
 
-main { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 20px calc(120px + env(safe-area-inset-bottom)); }
 
 .lede { color: var(--muted); margin: 0 0 24px; line-height: 1.5; }
 
@@ -73,82 +82,23 @@ main { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
   text-transform: uppercase;
 }
 
-.stage {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 28px;
-  padding: 28px 8px 8px;
-}
-
-.wheel-column {
+.draw-dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(15px + env(safe-area-inset-bottom));
+  z-index: 20;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(100%, 620px);
+  gap: 8px;
+  width: min(calc(100% - 30px), 360px);
+  pointer-events: none;
 }
 
-.wheel-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-}
-
-.pointer {
-  position: absolute;
-  z-index: 6;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 26px solid transparent;
-  border-right: 26px solid transparent;
-  border-top: 54px solid var(--red);
-  filter:
-    drop-shadow(2px 0 0 white)
-    drop-shadow(-2px 0 0 white)
-    drop-shadow(0 2px 0 white)
-    drop-shadow(0 -2px 0 white)
-    drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
-}
-
-.wheel {
-  position: absolute;
-  inset: 14px;
-  border-radius: 50%;
-  transition: transform 6.4s cubic-bezier(0.08, 0.72, 0, 1);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
-}
-
-canvas.disc { width: 100%; height: 100%; }
-
-.disc, .hub {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-
-.hub {
-  z-index: 3;
-  inset: 50%;
-  width: 74px;
-  height: 74px;
-  margin: -37px 0 0 -37px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.55);
-}
-
-.hub::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 50%;
-  background: var(--red);
+.draw-dock .error,
+.draw-dock .draw-button {
+  pointer-events: auto;
 }
 
 .draw-button, button.nav, .text-button {
@@ -157,13 +107,14 @@ canvas.disc { width: 100%; height: 100%; }
 }
 
 .draw-button {
-  margin-top: 18px;
+  width: 100%;
   background: var(--ink);
   color: white;
   border: 0;
   border-radius: 999px;
-  padding: 12px 22px;
+  padding: 14px 22px;
   font-weight: 600;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
 }
 
 .draw-button:disabled { opacity: 0.45; cursor: default; }
@@ -307,7 +258,6 @@ button.nav:disabled { opacity: 0.4; cursor: default; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wheel { transition-duration: 0.01s; }
   .reveal, .reveal-card { animation: none; }
 }
 
@@ -315,13 +265,10 @@ button.nav:disabled { opacity: 0.4; cursor: default; }
   .facts { grid-template-columns: 1fr; display: grid; }
 
   .brand { padding: calc(16px + env(safe-area-inset-top)) 16px 16px; }
-  .brand img { height: 42px; }
 
-  main { padding: 20px 12px calc(40px + env(safe-area-inset-bottom)); }
+  main { padding: 20px 12px calc(120px + env(safe-area-inset-bottom)); }
 
   .panel { padding: 8px; }
-
-  .stage { margin-bottom: 12px; padding: 12px 0 4px; }
 
   .draw-button, button.nav, .reveal-close {
     min-height: 44px;

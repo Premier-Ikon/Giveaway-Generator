@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Confetti from './Confetti'
-import Wheel, { landingRotation } from './Wheel'
 import { DRAWING_API } from '../lib/drawingApi'
 
 const PAGE = 1000
+const COUNTDOWN_FROM = 7
 
 function money(value) {
   return Number(value || 0).toLocaleString()
@@ -17,12 +17,11 @@ export default function Dashboard() {
   const [at, setAt] = useState(1)
   const [lineRows, setLineRows] = useState([])
   const [lineMeta, setLineMeta] = useState({ total: 0, empty: '' })
-  const [rotation, setRotation] = useState(0)
   const [phase, setPhase] = useState('idle')
   const [winner, setWinner] = useState(null)
   const [drawError, setDrawError] = useState('')
-  const [count, setCount] = useState(3)
-  const spinning = useRef(false)
+  const [count, setCount] = useState(COUNTDOWN_FROM)
+  const drawing = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -49,12 +48,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (phase !== 'countdown') return undefined
-    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 900
+    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 1000
     const timer = setTimeout(() => {
       setCount((value) => {
         if (value <= 1) {
+          drawing.current = false
           setPhase('landed')
-          return 3
+          return COUNTDOWN_FROM
         }
         return value - 1
       })
@@ -76,19 +76,20 @@ export default function Dashboard() {
   }, [summary, at])
 
   async function draw() {
-    if (spinning.current) return
-    spinning.current = true
-    setPhase('spinning')
+    if (drawing.current || phase !== 'idle') return
+    drawing.current = true
+    setPhase('drawing')
     setWinner(null)
     setDrawError('')
+    setCount(COUNTDOWN_FROM)
     try {
       const response = await fetch(`${DRAWING_API}/draw`, { method: 'POST' })
       if (!response.ok) throw new Error('The draw could not be completed.')
       const payload = await response.json()
-      setRotation((current) => landingRotation(current, payload.winner.line, summary.totalLines))
       setWinner(payload.winner)
+      setPhase('countdown')
     } catch (drawFailure) {
-      spinning.current = false
+      drawing.current = false
       setPhase('idle')
       setDrawError(drawFailure.message)
     }
@@ -96,11 +97,12 @@ export default function Dashboard() {
 
   const lastLine = lineRows.length ? lineRows[lineRows.length - 1].line : 0
   const displayName = winner?.name || winner?.id || ''
+  const showDrawButton = phase === 'idle' || phase === 'drawing'
 
   return (
     <>
     <header className="brand">
-      <img src="/bluff-logo.png" alt="Bluff" />
+      <h1>Bluff Fly A Fan Winner</h1>
     </header>
     <main>
       <div className="total">
@@ -109,26 +111,6 @@ export default function Dashboard() {
       </div>
       {error && <p className="error">{error}</p>}
       <section className="panel">
-        <div className="stage">
-          <div className="wheel-column">
-            <Wheel
-              rotation={rotation}
-              onSettled={() => {
-                spinning.current = false
-                setPhase((current) => {
-                  if (current !== 'spinning') return current
-                  setCount(3)
-                  return 'countdown'
-                })
-              }}
-            />
-            <button className="draw-button" type="button" onClick={draw} disabled={!summary || phase === 'spinning' || phase === 'countdown'}>
-              {phase === 'spinning' || phase === 'countdown' ? 'Drawing…' : 'Draw winner'}
-            </button>
-            {drawError && <p className="error">{drawError}</p>}
-          </div>
-        </div>
-
         <table id="line-table">
           <thead>
             <tr><th className="num">Line</th><th>Name</th><th>Source</th></tr>
@@ -158,6 +140,14 @@ export default function Dashboard() {
         </p>
       </section>
     </main>
+    {showDrawButton && (
+      <div className="draw-dock">
+        {drawError && <p className="error">{drawError}</p>}
+        <button className="draw-button" type="button" onClick={draw} disabled={!summary || phase === 'drawing'}>
+          {phase === 'drawing' ? 'Drawing…' : 'Draw winner'}
+        </button>
+      </div>
+    )}
     {phase === 'countdown' && (
       <div className="reveal" role="dialog" aria-modal="true" aria-label="Countdown">
         <p className="countdown">{count}</p>

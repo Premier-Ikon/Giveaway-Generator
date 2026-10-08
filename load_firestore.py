@@ -31,6 +31,18 @@ def client():
     return firestore.Client(project=PROJECT, database=DATABASE, credentials=Credentials(token))
 
 
+def phone_number(record):
+    for column in ("Phone", "Customer phone", "Billing phone", "Phone number"):
+        value = (record.get(column) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def contact_doc_id(source, ident):
+    return hashlib.sha256(f"{source}\n{ident}".encode()).hexdigest()
+
+
 def entry_count(value):
     try:
         count = int(float(value) * MULTIPLIER)
@@ -67,15 +79,20 @@ def gotbluff_rows():
         count = entry_count(record.get("Net sales"))
         email = (record.get("Customer email") or "").strip()
         name = (record.get("Customer name") or "").strip()
+        phone = phone_number(record)
         if count <= 0 or not email:
             continue
         add_entry(order, totals, email, count, fold=True)
-        if name and not totals[email.casefold()].get("name"):
-            totals[email.casefold()]["name"] = name
+        row = totals[email.casefold()]
+        if name and not row.get("name"):
+            row["name"] = name
+        if phone and not row.get("phone"):
+            row["phone"] = phone
     return [
         {
             "id": totals[key]["id"],
             "name": totals[key].get("name", ""),
+            "phone": totals[key].get("phone", ""),
             "source": GOTBLUFF,
             "entries": totals[key]["entries"],
         }
@@ -124,7 +141,15 @@ def write_chunks(db, source, rows):
         batch.set(ref, {
             "source": source,
             "index": index // CHUNK_ROWS,
-            "rows": chunk,
+            "rows": [
+                {
+                    "id": row["id"],
+                    "name": row.get("name", ""),
+                    "source": row.get("source", source),
+                    "entries": row["entries"],
+                }
+                for row in chunk
+            ],
         })
         pending += 1
         written += 1
